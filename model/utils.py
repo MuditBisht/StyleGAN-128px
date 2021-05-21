@@ -250,7 +250,7 @@ class GBlock(nn.Module):
                  use_pixel_norm,
                  use_instance_norm,
                  noise_input,        # noise
-                 dlatent_size=512,   # Disentangled latent (W) dimensionality.
+                 dlatent_size=128,   # Disentangled latent (W) dimensionality.
                  use_style=True,     # Enable style inputs?
                  f=None,        # (Huge overload, if you dont have enough resouces, please pass it as `f = None`)Low-pass filter to apply when resampling activations. None = no filtering.
                  factor=2,           # upsample factor.
@@ -261,8 +261,8 @@ class GBlock(nn.Module):
         super(GBlock, self).__init__()
         # self.nf = lambda stage: min(int(fmap_base / (2.0 ** (stage * fmap_decay))), fmap_max)
 
-        #           0,   1  , 2 ,  3 ,  4 ,  5 ,  6 ,  7 ,  8 ,  9 
-        self.nf = [512, 512 ,512, 512, 512, 512, 256, 128,  64,  32]
+        #           0,   1,   2,   3 ,  4 ,  5 ,  6 ,  7 
+        self.nf = [128, 128, 128, 128, 128, 128, 64, 32 ]
         # res
         self.res = res
 
@@ -275,8 +275,6 @@ class GBlock(nn.Module):
         if res < 6:
             # upsample method 1
             self.up_sample = Upscale2d(factor)
-        elif res<8:
-            self.up_sample = nn.ConvTranspose2d(self.nf[res-1], self.nf[res], 4, stride=2, padding=1)
         else:
             self.up_sample = nn.ConvTranspose2d(self.nf[res-1], self.nf[res], 3, stride=1, padding=1)
 

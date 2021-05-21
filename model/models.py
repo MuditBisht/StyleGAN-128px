@@ -9,13 +9,10 @@ from .utils import (
     PixelNorm, InstanceNorm, LayerEpilogue,GBlock)
 
 
-
-
-
 class G_mapping(nn.Module):
     def __init__(self,
-                 mapping_fmaps=512,
-                 dlatent_size=512,
+                 mapping_fmaps=128,
+                 dlatent_size=128,
                  resolution=128,
                  normalize_latents=True,  # Normalize latent vectors (Z) before feeding them to the mapping layers?
                  use_wscale=True,         # Enable equalized learning rate?
@@ -36,8 +33,8 @@ class G_mapping(nn.Module):
         )
 
         self.normalize_latents = normalize_latents
-        self.resolution_log2 = int(np.log2(resolution))
-        self.num_layers = self.resolution_log2 * 2 - 2
+        self.resolution_log2 = int(np.log2(resolution)) # 7
+        self.num_layers = self.resolution_log2 * 2 - 2 # 12
         self.pixel_norm = PixelNorm()
         # - 2 means we start from feature map with height and width equals 4.
         # as this example, we get num_layers = 18.
@@ -46,14 +43,14 @@ class G_mapping(nn.Module):
         if self.normalize_latents:
             x = self.pixel_norm(x)
         out = self.func(x)
-        return out, 16
+        return out, self.num_layers # Tensor(M, 128), 12
 
 
 class G_synthesis(nn.Module):
     def __init__(self,
-                 dlatent_size,                       # Disentangled latent (W) dimensionality.
+                 dlatent_size=128,                       # Disentangled latent (W) dimensionality.
                  resolution=128,                    # Output resolution (1024 x 1024 by default).
-                 fmap_base=2048,                     # Overall multiplier for the number of feature maps.
+                 fmap_base=512,                     # Overall multiplier for the number of feature maps.
                  num_channels=3,                     # Number of output color channels.
                  structure='fixed',                  # 'fixed' = no progressive growing, 'linear' = human-readable, 'recursive' = efficient, 'auto' = select automatically.
                  fmap_max=128,                       # Maximum number of feature maps in any layer.
@@ -65,38 +62,18 @@ class G_synthesis(nn.Module):
                  use_noise = True,                   # Enable noise inputs?
                  use_style = True                    # Enable style inputs?
                  ):                             # batch size.
-        """
-            2019.3.31
-        :param dlatent_size: 512 Disentangled latent(W) dimensionality.
-        :param resolution: 1024 x 1024.
-        :param fmap_base:
-        :param num_channels:
-        :param structure: only support 'fixed' mode.
-        :param fmap_max:
-        """
         super(G_synthesis, self).__init__()
 
         self.structure = structure
 
-        # - 2 means we start from feature map with height and width equals 4.
-        # as this example, we get num_layers = 18.
-        num_layers = 16
+        num_layers = 12
         self.num_layers = num_layers
 
         # Noise inputs.
         self.noise_inputs = []
-        
-        # if noise_image:
-        # for layer_idx in range(self.num_layers):
-        #     res = layer_idx // 2 + 2
-        #     res = min(128, 2 ** res)
-        #     avgpool = nn.AvgPool2d(128//res, stride=128//res)
-        #     img = avgpool(noise_image).mean(dim=0, keepdim=True)
-        #     self.noise_inputs.append(img)
-        # else:
         for layer_idx in range(num_layers):
           res = layer_idx // 2 + 2
-          shape = [1, 1, min(128, 2 ** res), min(128, 2 ** res)]
+          shape = [1, 1, min(resolution, 2 ** res), min(resolution, 2 ** res)]
           self.noise_inputs.append(torch.randn(*shape).to("cuda"))
 
         # Blur2d
@@ -110,51 +87,51 @@ class G_synthesis(nn.Module):
         self.torgb = Conv2d(8, num_channels, kernel_size=1, gain=1, use_wscale=use_wscale)
 
         # Initial Input Block
-        self.const_input = nn.Parameter(torch.ones(1, 512, 4, 4))
-        self.bias = nn.Parameter(torch.ones(512))
+        self.const_input = nn.Parameter(torch.ones(1, 128, 4, 4))
+        self.bias = nn.Parameter(torch.ones(128))
         
-        self.adaIn1 = LayerEpilogue(512, dlatent_size, use_wscale, use_noise,
+        self.adaIn1 = LayerEpilogue(128, 128, use_wscale, use_noise,
                                     use_pixel_norm, use_instance_norm, use_style)
-        self.conv1  = Conv2d(input_channels=512, output_channels=512, kernel_size=3, use_wscale=use_wscale)
+        self.conv1  = Conv2d(input_channels=128, output_channels=128, kernel_size=3, use_wscale=use_wscale)
         
-        self.adaIn2 = LayerEpilogue(512, dlatent_size, use_wscale, use_noise, use_pixel_norm,
+        self.adaIn2 = LayerEpilogue(128, 128, use_wscale, use_noise, use_pixel_norm,
                                     use_instance_norm, use_style)
 
         # Common Block
-        # 512 x 4 x 4 -> 512 x 8 x 8
+        # 128 x 4 x 4 -> 128 x 4 x 4
         res = 3
         self.GBlock1 = GBlock(res, use_wscale, use_noise, use_pixel_norm, use_instance_norm,
                               self.noise_inputs)
 
-        # 512 x 8 x 8 -> 512 x 16 x 16
+        # 128 x 8 x 8 -> 128 x 16 x 16
         res = 4
         self.GBlock2 = GBlock(res, use_wscale, use_noise, use_pixel_norm, use_instance_norm,
                               self.noise_inputs)
 
-        # 512 x 16 x 16 -> 512 x 32 x 32
+        # 128 x 16 x 16 -> 128 x 32 x 32
         res = 5
         self.GBlock3 = GBlock(res, use_wscale, use_noise, use_pixel_norm, use_instance_norm,
                               self.noise_inputs)
 
-        # 512 x 32 x 32 -> 256 x 64 x 64
+        # 128 x 32 x 32 -> 64 x 64 x 64
         res = 6
         self.GBlock4 = GBlock(res, use_wscale, use_noise, use_pixel_norm, use_instance_norm,
                               self.noise_inputs)
 
-        # 256 x 64 x 64 -> 128 x 128 x 128
+        # 64 x 64 x 64 -> 32 x 128 x 128
         res = 7
         self.GBlock5 = GBlock(res, use_wscale, use_noise, use_pixel_norm, use_instance_norm,
                               self.noise_inputs)
 
-        # 128 x 128 x 128 -> 64 x 128 x 128
-        res = 8
-        self.GBlock6 = GBlock(res, use_wscale, use_noise, use_pixel_norm, use_instance_norm,
-                              self.noise_inputs)
+        # # 128 x 128 x 128 -> 64 x 128 x 128
+        # res = 8
+        # self.GBlock6 = GBlock(res, use_wscale, use_noise, use_pixel_norm, use_instance_norm,
+        #                       self.noise_inputs)
 
-        # 64 x 128 x 128 -> 32 x 128 x 128
-        res = 9
-        self.GBlock7 = GBlock(res, use_wscale, use_noise, use_pixel_norm, use_instance_norm,
-                              self.noise_inputs)
+        # # 64 x 128 x 128 -> 32 x 128 x 128
+        # res = 9
+        # self.GBlock7 = GBlock(res, use_wscale, use_noise, use_pixel_norm, use_instance_norm,
+        #                       self.noise_inputs)
 
         # # 512 x 512 -> 1024 x 1024
         # res = 10
@@ -172,44 +149,44 @@ class G_synthesis(nn.Module):
         if self.structure == 'fixed':
             # initial block 0:
 
-            # M x 512 x 4 x 4
+            # M x 128 x 4 x 4
             x = self.const_input.expand(dlatent.size(0), -1, -1, -1)
             x = x + self.bias.view(1, -1, 1, 1)
 
-            # M x 512 x 4 x 4
+            # M x 128 x 4 x 4
             x = self.adaIn1(x, self.noise_inputs[0], dlatent[:, 0])
             x = self.conv1(x)
             x = self.adaIn2(x, self.noise_inputs[1], dlatent[:, 1])
 
             # block 1:
-            # 512 x 4 x 4 -> 512 x 8 x 8
+            # 128 x 4 x 4 -> 128 x 8 x 8
             x = self.GBlock1(x, dlatent)
 
             # block 2:
-            # 512 x 8 x 8 -> 512 x 16 x 16
+            # 128 x 8 x 8 -> 128 x 16 x 16
             x = self.GBlock2(x, dlatent)
 
             # block 3:
-            # 512 x 16 x 16 -> 512 x 32 x 32
+            # 128 x 16 x 16 -> 128 x 32 x 32
             x = self.GBlock3(x, dlatent)
 
             # block 4:
-            # 512 x 32 x 32 -> 256 x 64 x 64
+            # 128 x 32 x 32 -> 64 x 64 x 64
             x = self.GBlock4(x, dlatent)
 
             # block 5:
-            # 256 x 64 x 64 -> 128 x 128 x 128
+            # 64 x 64 x 64 -> 32 x 128 x 128
             x = self.GBlock5(x, dlatent)
 
 
 
             # block 6:
-            # 128 x 128 x 128 -> 64 x 128 x 128
-            x = self.GBlock6(x, dlatent)
+            # 32 x 128 x 128 ->  x 128 x 128
+            # x = self.GBlock6(x, dlatent)
 
             # block 7:
             # 64 x 128 x 128 -> 32 x 128 x 128
-            x = self.GBlock7(x, dlatent)
+            # x = self.GBlock7(x, dlatent)
 
             x = self.channel_shrinkage(x)
             images_out = self.torgb(x)
