@@ -276,7 +276,7 @@ class GBlock(nn.Module):
             # upsample method 1
             self.up_sample = Upscale2d(factor)
         else:
-            self.up_sample = nn.ConvTranspose2d(self.nf[res-1], self.nf[res], 3, stride=1, padding=1)
+            self.up_sample = nn.ConvTranspose2d(self.nf[res-1], self.nf[res], 4, stride=2, padding=1)
 
         # A Composition of LayerEpilogue and Conv2d.
         self.adaIn1 = LayerEpilogue(self.nf[res], dlatent_size, use_wscale, use_noise,
