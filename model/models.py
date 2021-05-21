@@ -197,7 +197,7 @@ class G_synthesis(nn.Module):
 
 class StyleGenerator(nn.Module):
     def __init__(self,
-                mapping_fmaps=512,
+                mapping_fmaps=128,
                 style_mixing_prob=0.9,       # Probability of mixing styles during training. None = disable.
                 truncation_psi=0.7,          # Style strength multiplier for the truncation trick. None = disable.
                 truncation_cutoff=8,          # Number of layers for which to apply the truncation trick. None = disable.
@@ -235,11 +235,6 @@ class StyleGenerator(nn.Module):
         # print(dlatents1.shape)
         img = self.synthesis(dlatents1)
         return img
-
-
-
-
-
 
 
 
