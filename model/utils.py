@@ -67,9 +67,6 @@ class FC(nn.Module):
 
 
 class ApplyStyle(nn.Module):
-    """
-        @ref: https://github.com/lernapparat/lernapparat/blob/master/style_gan/pytorch_style_gan.ipynb
-    """
     def __init__(self, latent_size, channels, use_wscale):
         super(ApplyStyle, self).__init__()
         self.linear = FC(latent_size,
@@ -77,10 +74,15 @@ class ApplyStyle(nn.Module):
                       gain=1.0,
                       use_wscale=use_wscale)
 
+    # x: (M, c, X, X) <> latent: w(M, 128)
     def forward(self, x, latent):
         style = self.linear(latent)  # style => [batch_size, n_channels*2]
+        # M x 2*c
         shape = [-1, 2, x.size(1), 1, 1]
-        style = style.view(shape)    # [batch_size, 2, n_channels, ...]
+        # M x 2 x c x 1 x 1
+        style = style.view(shape)  # [batch_size, 2, n_channels, ...]
+        # a, b
+        # x = x * (a+1) + b
         x = x * (style[:, 0] + 1.) + style[:, 1]
         return x
 
@@ -180,7 +182,7 @@ class PixelNorm(nn.Module):
         self.epsilon = epsilon
 
     def forward(self, x):
-        tmp  = torch.mul(x, x) # or x ** 2
+        tmp  = torch.mul(x, x) # or x ** 2 [M, c, X, X]
         tmp1 = torch.rsqrt(torch.mean(tmp, dim=1, keepdim=True) + self.epsilon)
 
         return x * tmp1

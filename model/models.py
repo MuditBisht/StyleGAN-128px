@@ -11,16 +11,17 @@ from .utils import (
 
 class G_mapping(nn.Module):
     def __init__(self,
-                 mapping_fmaps=128,
-                 dlatent_size=128,
-                 resolution=128,
-                 normalize_latents=True,  # Normalize latent vectors (Z) before feeding them to the mapping layers?
-                 use_wscale=True,         # Enable equalized learning rate?
-                 lrmul=0.01,              # Learning rate multiplier for the mapping layers.
-                 gain=2**(0.5)            # original gain in tensorflow.
+                    mapping_fmaps=128,
+                    dlatent_size=128,
+                    resolution=128,
+                    normalize_latents=True,  # Normalize latent vectors (Z) before feeding them to the mapping layers?
+                    use_wscale=True,         # Enable equalized learning rate?
+                    lrmul=0.01,              # Learning rate multiplier for the mapping layers.
+                    gain=2**(0.5)            # original gain in tensorflow.
         ):
         super(G_mapping, self).__init__()
         self.mapping_fmaps = mapping_fmaps
+        
         self.func = nn.Sequential(
             FC( self.mapping_fmaps, dlatent_size, gain, lrmul=lrmul, use_wscale=use_wscale ),
             FC( dlatent_size,       dlatent_size, gain, lrmul=lrmul, use_wscale=use_wscale ),
@@ -73,7 +74,8 @@ class G_synthesis(nn.Module):
         self.noise_inputs = []
         for layer_idx in range(num_layers):
           res = layer_idx // 2 + 2
-          shape = [1, 1, min(resolution, 2 ** res), min(resolution, 2 ** res)]
+          shape = [1, 1, min(resolution, 2 ** res), min(resolution, 2 ** res)]  # M * c * X * X
+        # send tensor to CUDA (gpu)
           self.noise_inputs.append(torch.randn(*shape).to("cuda"))
 
         # Blur2d
@@ -248,15 +250,8 @@ class StyleDiscriminator(nn.Module):
                  structure='fixed',  # 'fixed' = no progressive growing, 'linear' = human-readable, 'recursive' = efficient, only support 'fixed' mode now.
                  fmap_max=128,
                  fmap_decay=1.0,
-                 # f=[1, 2, 1]         # (Huge overload, if you dont have enough resouces, please pass it as `f = None`)Low-pass filter to apply when resampling activations. None = no filtering.
                  f=None         # (Huge overload, if you dont have enough resouces, please pass it as `f = None`)Low-pass filter to apply when resampling activations. None = no filtering.
                  ):
-        """
-            Noitce: we only support input pic with height == width.
-
-            if H or W >= 128, we use avgpooling2d to do feature map shrinkage.
-            else: we use ordinary conv2d.
-        """
         super().__init__()
         self.resolution_log2 = int(np.log2(resolution))
         assert resolution == 2 ** self.resolution_log2 and resolution >= 4

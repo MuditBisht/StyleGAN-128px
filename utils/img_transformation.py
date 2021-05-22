@@ -17,9 +17,8 @@ def NormalizeImage(img):
 def UnNormalizeImage(img):
   mean = [127.5, 127.5, 127.5]
   std = [127.5, 127.5, 127.5]
-  result = []
+  result = [ ]
   for t, m, s in zip(img, mean, std):
-    # print(t.shape, m, s)
     result.append(t * s + m)
   tensor = torch.stack(result)
   return tensor
