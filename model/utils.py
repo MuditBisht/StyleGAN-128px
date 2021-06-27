@@ -8,7 +8,6 @@ from torch.autograd import grad
 import torch.autograd as autograd
 
 import numpy as np
-import matplotlib.pyplot as plt
 from collections import OrderedDict
 
 import os
