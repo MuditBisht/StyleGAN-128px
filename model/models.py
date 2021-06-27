@@ -61,8 +61,9 @@ class G_synthesis(nn.Module):
                  use_instance_norm   = True,         # Enable instance normalization?
                  use_wscale = True,                  # Enable equalized learning rate?
                  use_noise = True,                   # Enable noise inputs?
-                 use_style = True                    # Enable style inputs?
-                 ):                             # batch size.
+                 use_style = True,                    # Enable style inputs?
+                 device="cuda"
+    ):                             # batch size.
         super(G_synthesis, self).__init__()
 
         self.structure = structure
@@ -75,8 +76,8 @@ class G_synthesis(nn.Module):
         for layer_idx in range(num_layers):
           res = layer_idx // 2 + 2
           shape = [1, 1, min(resolution, 2 ** res), min(resolution, 2 ** res)]  # M * c * X * X
-        # send tensor to CUDA (gpu)
-          self.noise_inputs.append(torch.randn(*shape).to("cuda"))
+        # send tensor to device (cuda, cpu)
+          self.noise_inputs.append(torch.randn(*shape).to(device))
 
         # Blur2d
         self.blur = Blur2d(f)
@@ -151,34 +152,43 @@ class G_synthesis(nn.Module):
         if self.structure == 'fixed':
             # initial block 0:
 
+            # print('Dlatent: ', dlatent.shape)
+
             # M x 128 x 4 x 4
             x = self.const_input.expand(dlatent.size(0), -1, -1, -1)
             x = x + self.bias.view(1, -1, 1, 1)
+            # print('X: ', x.shape)
 
             # M x 128 x 4 x 4
             x = self.adaIn1(x, self.noise_inputs[0], dlatent[:, 0])
             x = self.conv1(x)
             x = self.adaIn2(x, self.noise_inputs[1], dlatent[:, 1])
+            # print('X: ', x.shape)
 
             # block 1:
             # 128 x 4 x 4 -> 128 x 8 x 8
             x = self.GBlock1(x, dlatent)
+            # print('X: ', x.shape)
 
             # block 2:
             # 128 x 8 x 8 -> 128 x 16 x 16
             x = self.GBlock2(x, dlatent)
+            # print('X: ', x.shape)
 
             # block 3:
             # 128 x 16 x 16 -> 128 x 32 x 32
             x = self.GBlock3(x, dlatent)
+            # print('X: ', x.shape)
 
             # block 4:
             # 128 x 32 x 32 -> 64 x 64 x 64
             x = self.GBlock4(x, dlatent)
+            # print('X: ', x.shape)
 
             # block 5:
             # 64 x 64 x 64 -> 32 x 128 x 128
             x = self.GBlock5(x, dlatent)
+            # print('X: ', x.shape)
 
 
 
@@ -203,7 +213,8 @@ class StyleGenerator(nn.Module):
                 style_mixing_prob=0.9,       # Probability of mixing styles during training. None = disable.
                 truncation_psi=0.7,          # Style strength multiplier for the truncation trick. None = disable.
                 truncation_cutoff=8,          # Number of layers for which to apply the truncation trick. None = disable.
-                 **kwargs):
+                device="cpu",
+                **kwargs):
         super(StyleGenerator, self).__init__()
         self.mapping_fmaps = mapping_fmaps
         self.style_mixing_prob = style_mixing_prob
@@ -212,12 +223,10 @@ class StyleGenerator(nn.Module):
 
         # print(noise_image.shape if noise_image else "NO Noise Image")
         self.mapping = G_mapping(self.mapping_fmaps, **kwargs)
-        self.synthesis = G_synthesis(self.mapping_fmaps, **kwargs)
+        self.synthesis = G_synthesis(self.mapping_fmaps, device=device, **kwargs)
 
     def forward(self, latents1):
         dlatents1, num_layers = self.mapping(latents1)
-        # let [N, O] -> [N, num_layers, O]
-        # 这里的unsqueeze不能使用inplace操作, 如果这样的话, 反向传播的链条会断掉的.
         dlatents1 = dlatents1.unsqueeze(1)
         dlatents1 = dlatents1.expand(-1, int(num_layers), -1)
 
