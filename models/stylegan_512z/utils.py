@@ -1,19 +1,25 @@
-import torch
+# coding: UTF-8
+"""
+    @author: samuel ko
+    @date:   2019.04.11
+    @notice:
+             1) refactor the module of Gsynthesis with
+                - LayerEpilogue.
+                - Upsample2d.
+                - GBlock.
+                and etc.
+             2) the initialization of every patch we use are all abided by the original NvLabs released code.
+             3) Discriminator is a simplicity version of PyTorch.
+             4) fix bug: default settings of batchsize.
+
+"""
 import torch.nn.functional as F
 import torch.nn as nn
-import torch.optim as optim
-from torch.nn.init import kaiming_normal_
-from torch.autograd import Variable
-from torch.autograd import grad
-import torch.autograd as autograd
-
 import numpy as np
-from collections import OrderedDict
-
+import torch
 import os
-import glob
-
-import cv2 as cv
+from collections import OrderedDict
+from torch.nn.init import kaiming_normal_
 
 
 class ApplyNoise(nn.Module):
@@ -27,6 +33,25 @@ class ApplyNoise(nn.Module):
         return x + self.weight.view(1, -1, 1, 1) * noise.to(x.device)
 
 
+class ApplyStyle(nn.Module):
+    """
+        @ref: https://github.com/lernapparat/lernapparat/blob/master/style_gan/pytorch_style_gan.ipynb
+    """
+    def __init__(self, latent_size, channels, use_wscale):
+        super(ApplyStyle, self).__init__()
+        self.linear = FC(latent_size,
+                      channels * 2,
+                      gain=1.0,
+                      use_wscale=use_wscale)
+
+    def forward(self, x, latent):
+        style = self.linear(latent)  # style => [batch_size, n_channels*2]
+        shape = [-1, 2, x.size(1), 1, 1]
+        style = style.view(shape)    # [batch_size, 2, n_channels, ...]
+        x = x * (style[:, 0] + 1.) + style[:, 1]
+        return x
+
+
 class FC(nn.Module):
     def __init__(self,
                  in_channels,
@@ -38,7 +63,6 @@ class FC(nn.Module):
         """
             The complete conversion of Dense/FC/Linear Layer of original Tensorflow version.
         """
-
         super(FC, self).__init__()
         he_std = gain * in_channels ** (-0.5)  # He init
         if use_wscale:
@@ -63,27 +87,6 @@ class FC(nn.Module):
         out = F.leaky_relu(out, 0.2, inplace=True)
         return out
 
-
-
-class ApplyStyle(nn.Module):
-    def __init__(self, latent_size, channels, use_wscale):
-        super(ApplyStyle, self).__init__()
-        self.linear = FC(latent_size,
-                      channels * 2,
-                      gain=1.0,
-                      use_wscale=use_wscale)
-
-    # x: (M, c, X, X) <> latent: w(M, 128)
-    def forward(self, x, latent):
-        style = self.linear(latent)  # style => [batch_size, n_channels*2]
-        # M x 2*c
-        shape = [-1, 2, x.size(1), 1, 1]
-        # M x 2 x c x 1 x 1
-        style = style.view(shape)  # [batch_size, 2, n_channels, ...]
-        # a, b
-        # x = x * (a+1) + b
-        x = x * (style[:, 0] + 1.) + style[:, 1]
-        return x
 
 class Blur2d(nn.Module):
     def __init__(self, f=[1,2,1], normalize=True, flip=False, stride=1):
@@ -160,6 +163,11 @@ class Conv2d(nn.Module):
 
 class Upscale2d(nn.Module):
     def __init__(self, factor=2, gain=1):
+        """
+            the first upsample method in G_synthesis.
+        :param factor:
+        :param gain:
+        """
         super().__init__()
         self.gain = gain
         self.factor = factor
@@ -174,14 +182,17 @@ class Upscale2d(nn.Module):
         return x
 
 
-
 class PixelNorm(nn.Module):
     def __init__(self, epsilon=1e-8):
+        """
+            @notice: avoid in-place ops.
+            https://discuss.pytorch.org/t/encounter-the-runtimeerror-one-of-the-variables-needed-for-gradient-computation-has-been-modified-by-an-inplace-operation/836/3
+        """
         super(PixelNorm, self).__init__()
         self.epsilon = epsilon
 
     def forward(self, x):
-        tmp  = torch.mul(x, x) # or x ** 2 [M, c, X, X]
+        tmp  = torch.mul(x, x) # or x ** 2
         tmp1 = torch.rsqrt(torch.mean(tmp, dim=1, keepdim=True) + self.epsilon)
 
         return x * tmp1
@@ -189,6 +200,10 @@ class PixelNorm(nn.Module):
 
 class InstanceNorm(nn.Module):
     def __init__(self, epsilon=1e-8):
+        """
+            @notice: avoid in-place ops.
+            https://discuss.pytorch.org/t/encounter-the-runtimeerror-one-of-the-variables-needed-for-gradient-computation-has-been-modified-by-an-inplace-operation/836/3
+        """
         super(InstanceNorm, self).__init__()
         self.epsilon = epsilon
 
@@ -242,7 +257,6 @@ class LayerEpilogue(nn.Module):
         return x
 
 
-
 class GBlock(nn.Module):
     def __init__(self,
                  res,
@@ -251,19 +265,17 @@ class GBlock(nn.Module):
                  use_pixel_norm,
                  use_instance_norm,
                  noise_input,        # noise
-                 dlatent_size=128,   # Disentangled latent (W) dimensionality.
+                 dlatent_size=512,   # Disentangled latent (W) dimensionality.
                  use_style=True,     # Enable style inputs?
                  f=None,        # (Huge overload, if you dont have enough resouces, please pass it as `f = None`)Low-pass filter to apply when resampling activations. None = no filtering.
                  factor=2,           # upsample factor.
-                 fmap_base=2048,     # Overall multiplier for the number of feature maps.
+                 fmap_base=8192,     # Overall multiplier for the number of feature maps.
                  fmap_decay=1.0,     # log2 feature map reduction when doubling the resolution.
-                 fmap_max=128,       # Maximum number of feature maps in any layer.
+                 fmap_max=512,       # Maximum number of feature maps in any layer.
                  ):
         super(GBlock, self).__init__()
-        # self.nf = lambda stage: min(int(fmap_base / (2.0 ** (stage * fmap_decay))), fmap_max)
+        self.nf = lambda stage: min(int(fmap_base / (2.0 ** (stage * fmap_decay))), fmap_max)
 
-        #           0,   1,   2,   3 ,  4 ,  5 ,  6 ,  7 
-        self.nf = [128, 128, 128, 128, 128, 128, 64, 32 ]
         # res
         self.res = res
 
@@ -273,18 +285,19 @@ class GBlock(nn.Module):
         # noise
         self.noise_input = noise_input
 
-        if res < 6:
+        if res < 7:
             # upsample method 1
             self.up_sample = Upscale2d(factor)
         else:
-            self.up_sample = nn.ConvTranspose2d(self.nf[res-1], self.nf[res], 4, stride=2, padding=1)
+            # upsample method 2
+            self.up_sample = nn.ConvTranspose2d(self.nf(res-3), self.nf(res-2), 4, stride=2, padding=1)
 
         # A Composition of LayerEpilogue and Conv2d.
-        self.adaIn1 = LayerEpilogue(self.nf[res], dlatent_size, use_wscale, use_noise,
+        self.adaIn1 = LayerEpilogue(self.nf(res-2), dlatent_size, use_wscale, use_noise,
                                     use_pixel_norm, use_instance_norm, use_style)
-        self.conv1  = Conv2d(input_channels=self.nf[res], output_channels=self.nf[res],
+        self.conv1  = Conv2d(input_channels=self.nf(res-2), output_channels=self.nf(res-2),
                              kernel_size=3, use_wscale=use_wscale)
-        self.adaIn2 = LayerEpilogue(self.nf[res], dlatent_size, use_wscale, use_noise,
+        self.adaIn2 = LayerEpilogue(self.nf(res-2), dlatent_size, use_wscale, use_noise,
                                     use_pixel_norm, use_instance_norm, use_style)
 
     def forward(self, x, dlatent):
@@ -293,3 +306,5 @@ class GBlock(nn.Module):
         x = self.conv1(x)
         x = self.adaIn2(x, self.noise_input[self.res*2-3], dlatent[:, self.res*2-3])
         return x
+
+#model.apply(weights_init)
