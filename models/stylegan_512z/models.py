@@ -110,42 +110,50 @@ class G_synthesis(nn.Module):
         # Common Block
         # 4 x 4 -> 8 x 8
         res = 3
-        self.GBlock1 = GBlock(res, use_wscale, use_noise, use_pixel_norm, use_instance_norm,
+        if res <= self.resolution_log2:
+            self.GBlock1 = GBlock(res, use_wscale, use_noise, use_pixel_norm, use_instance_norm,
                               self.noise_inputs)
 
         # 8 x 8 -> 16 x 16
         res = 4
-        self.GBlock2 = GBlock(res, use_wscale, use_noise, use_pixel_norm, use_instance_norm,
+        if res <= self.resolution_log2:
+            self.GBlock2 = GBlock(res, use_wscale, use_noise, use_pixel_norm, use_instance_norm,
                               self.noise_inputs)
 
         # 16 x 16 -> 32 x 32
         res = 5
-        self.GBlock3 = GBlock(res, use_wscale, use_noise, use_pixel_norm, use_instance_norm,
+        if res <= self.resolution_log2:
+            self.GBlock3 = GBlock(res, use_wscale, use_noise, use_pixel_norm, use_instance_norm,
                               self.noise_inputs)
 
         # 32 x 32 -> 64 x 64
         res = 6
-        self.GBlock4 = GBlock(res, use_wscale, use_noise, use_pixel_norm, use_instance_norm,
+        if res <= self.resolution_log2:
+            self.GBlock4 = GBlock(res, use_wscale, use_noise, use_pixel_norm, use_instance_norm,
                               self.noise_inputs)
 
         # 64 x 64 -> 128 x 128
         res = 7
-        self.GBlock5 = GBlock(res, use_wscale, use_noise, use_pixel_norm, use_instance_norm,
+        if res <= self.resolution_log2:
+            self.GBlock5 = GBlock(res, use_wscale, use_noise, use_pixel_norm, use_instance_norm,
                               self.noise_inputs)
 
         # 128 x 128 -> 256 x 256
         res = 8
-        self.GBlock6 = GBlock(res, use_wscale, use_noise, use_pixel_norm, use_instance_norm,
+        if res <= self.resolution_log2:
+            self.GBlock6 = GBlock(res, use_wscale, use_noise, use_pixel_norm, use_instance_norm,
                               self.noise_inputs)
 
         # 256 x 256 -> 512 x 512
         res = 9
-        self.GBlock7 = GBlock(res, use_wscale, use_noise, use_pixel_norm, use_instance_norm,
+        if res <= self.resolution_log2:
+            self.GBlock7 = GBlock(res, use_wscale, use_noise, use_pixel_norm, use_instance_norm,
                               self.noise_inputs)
 
         # 512 x 512 -> 1024 x 1024
         res = 10
-        self.GBlock8 = GBlock(res, use_wscale, use_noise, use_pixel_norm, use_instance_norm,
+        if res <= self.resolution_log2:
+            self.GBlock8 = GBlock(res, use_wscale, use_noise, use_pixel_norm, use_instance_norm,
                               self.noise_inputs)
 
     def forward(self, dlatent):
@@ -186,40 +194,37 @@ class G_synthesis(nn.Module):
                 x = self.GBlock3(x, dlatent)
 
             # block 4:
-            # (512 x 32 x 32) -> (512 x 64 x 64)
+            # (512 x 32 x 32) -> (256 x 64 x 64)
             res = 6
             if res <= self.resolution_log2:
                 x = self.GBlock4(x, dlatent)
 
             # block 5:
-            # (512 x 64 x 64) -> (256 x 128 x 128)
+            # (256 x 64 x 64) -> (128 x 128 x 128)
             res = 7
             if res <= self.resolution_log2:
                 x = self.GBlock5(x, dlatent)
 
             # block 6:
-            # (512 x 128 x 128) -> (256 x 256 x 256)
+            # (128 x 128 x 128) -> (64 x 256 x 256)
             res = 8
             if res <= self.resolution_log2:
                 x = self.GBlock6(x, dlatent)
 
             # block 7:
-            # (256 x 256 x 256) -> (128 x 512 x 512)
+            # (64 x 256 x 256) -> (32 x 512 x 512)
             res = 9
             if res <= self.resolution_log2:
                 x = self.GBlock7(x, dlatent)
 
             # block 8:
-            # (128 x 512 x 512) -> (64 x 1024 x 1024)
+            # (32 x 512 x 512) -> (16 x 1024 x 1024)
             res = 10
             if res <= self.resolution_log2:
                 x = self.GBlock8(x, dlatent)
 
-
-            # (256 x 128 x 128) -> (64 x 128 x 128)
             x = self.channel_shrinkage(x)
-
-            # (64 x 128 x 128) -> (3 x 128 x 128)
+            # (16 x 1024 x 1024) -> (3 x 1024 x 1024)
             images_out = self.torgb(x)
             return images_out
 
@@ -307,14 +312,28 @@ class StyleDiscriminator(nn.Module):
         self.down24 = nn.Conv2d(self.nf(self.resolution_log2-8), self.nf(self.resolution_log2-8), kernel_size=2, stride=2)
 
         # conv1: padding=same
-        self.conv1 = nn.Conv2d(self.nf(self.resolution_log2-1), self.nf(self.resolution_log2-1), kernel_size=3, padding=(1, 1))
-        self.conv2 = nn.Conv2d(self.nf(self.resolution_log2-1), self.nf(self.resolution_log2-2), kernel_size=3, padding=(1, 1))
-        self.conv3 = nn.Conv2d(self.nf(self.resolution_log2-2), self.nf(self.resolution_log2-3), kernel_size=3, padding=(1, 1))
-        self.conv4 = nn.Conv2d(self.nf(self.resolution_log2-3), self.nf(self.resolution_log2-4), kernel_size=3, padding=(1, 1))
-        self.conv5 = nn.Conv2d(self.nf(self.resolution_log2-4), self.nf(self.resolution_log2-5), kernel_size=3, padding=(1, 1))
-        self.conv6 = nn.Conv2d(self.nf(self.resolution_log2-5), self.nf(self.resolution_log2-6), kernel_size=3, padding=(1, 1))
-        self.conv7 = nn.Conv2d(self.nf(self.resolution_log2-6), self.nf(self.resolution_log2-7), kernel_size=3, padding=(1, 1))
-        self.conv8 = nn.Conv2d(self.nf(self.resolution_log2-7), self.nf(self.resolution_log2-8), kernel_size=3, padding=(1, 1))
+        if self.resolution_log2 > 2:
+            self.conv1 = nn.Conv2d(self.nf(self.resolution_log2-1), self.nf(self.resolution_log2-1), kernel_size=3, padding=(1, 1))
+        if self.resolution_log2 > 3:
+            self.conv2 = nn.Conv2d(self.nf(self.resolution_log2-1), self.nf(self.resolution_log2-2), kernel_size=3, padding=(1, 1))
+        
+        if self.resolution_log2 > 4:
+            self.conv3 = nn.Conv2d(self.nf(self.resolution_log2-2), self.nf(self.resolution_log2-3), kernel_size=3, padding=(1, 1))
+        
+        if self.resolution_log2 > 5:
+            self.conv4 = nn.Conv2d(self.nf(self.resolution_log2-3), self.nf(self.resolution_log2-4), kernel_size=3, padding=(1, 1))
+        
+        if self.resolution_log2 > 6:
+            self.conv5 = nn.Conv2d(self.nf(self.resolution_log2-4), self.nf(self.resolution_log2-5), kernel_size=3, padding=(1, 1))
+        
+        if self.resolution_log2 > 7:
+            self.conv6 = nn.Conv2d(self.nf(self.resolution_log2-5), self.nf(self.resolution_log2-6), kernel_size=3, padding=(1, 1))
+        
+        if self.resolution_log2 > 8:
+            self.conv7 = nn.Conv2d(self.nf(self.resolution_log2-6), self.nf(self.resolution_log2-7), kernel_size=3, padding=(1, 1))
+        
+        if self.resolution_log2 > 9:
+            self.conv8 = nn.Conv2d(self.nf(self.resolution_log2-7), self.nf(self.resolution_log2-8), kernel_size=3, padding=(1, 1))
 
         # calculate point:
         self.conv_last = nn.Conv2d(self.nf(self.resolution_log2-8), self.nf(1), kernel_size=3, padding=(1, 1))
