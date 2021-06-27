@@ -76,7 +76,6 @@ class G_synthesis(nn.Module):
         for layer_idx in range(num_layers):
           res = layer_idx // 2 + 2
           shape = [1, 1, min(resolution, 2 ** res), min(resolution, 2 ** res)]  # M * c * X * X
-        # send tensor to device (cuda, cpu)
           self.noise_inputs.append(torch.randn(*shape).to(device))
 
         # Blur2d
@@ -213,7 +212,7 @@ class StyleGenerator(nn.Module):
                 style_mixing_prob=0.9,       # Probability of mixing styles during training. None = disable.
                 truncation_psi=0.7,          # Style strength multiplier for the truncation trick. None = disable.
                 truncation_cutoff=8,          # Number of layers for which to apply the truncation trick. None = disable.
-                device="cpu",
+                device="cuda",
                 **kwargs):
         super(StyleGenerator, self).__init__()
         self.mapping_fmaps = mapping_fmaps
