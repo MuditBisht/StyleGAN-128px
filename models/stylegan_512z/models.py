@@ -304,42 +304,53 @@ class StyleDiscriminator(nn.Module):
         # blur2d
         self.blur2d = Blur2d(f)
 
-        # down_sample
-        self.down1 = nn.AvgPool2d(2)
-        self.down21 = nn.Conv2d(self.nf(self.resolution_log2-5), self.nf(self.resolution_log2-5), kernel_size=2, stride=2)
-        self.down22 = nn.Conv2d(self.nf(self.resolution_log2-6), self.nf(self.resolution_log2-6), kernel_size=2, stride=2)
-        self.down23 = nn.Conv2d(self.nf(self.resolution_log2-7), self.nf(self.resolution_log2-7), kernel_size=2, stride=2)
-        self.down24 = nn.Conv2d(self.nf(self.resolution_log2-8), self.nf(self.resolution_log2-8), kernel_size=2, stride=2)
 
         # conv1: padding=same
-        if self.resolution_log2 > 2:
-            self.conv1 = nn.Conv2d(self.nf(self.resolution_log2-1), self.nf(self.resolution_log2-1), kernel_size=3, padding=(1, 1))
-        if self.resolution_log2 > 3:
-            self.conv2 = nn.Conv2d(self.nf(self.resolution_log2-1), self.nf(self.resolution_log2-2), kernel_size=3, padding=(1, 1))
+        # (16 x 1024 x 1024 ) -> ( 32 x 512 x 512 )
+        if self.resolution_log2 >= 10:
+            self.conv1 = nn.Conv2d( 16, 32, kernel_size=3, padding=(1, 1))
+
+        # ( 32 x 512 x 512 ) -> ( 64 x 256 x 256 )
+        if self.resolution_log2 >= 9:
+            self.conv2 = nn.Conv2d( 32, 64, kernel_size=3, padding=(1, 1))
         
-        if self.resolution_log2 > 4:
-            self.conv3 = nn.Conv2d(self.nf(self.resolution_log2-2), self.nf(self.resolution_log2-3), kernel_size=3, padding=(1, 1))
+        # ( 64 x 256 x 256 ) -> ( 128 x 128 x 128 )
+        if self.resolution_log2 >= 8:
+            self.conv3 = nn.Conv2d(64, 128, kernel_size=3, padding=(1, 1))
         
-        if self.resolution_log2 > 5:
-            self.conv4 = nn.Conv2d(self.nf(self.resolution_log2-3), self.nf(self.resolution_log2-4), kernel_size=3, padding=(1, 1))
         
-        if self.resolution_log2 > 6:
-            self.conv5 = nn.Conv2d(self.nf(self.resolution_log2-4), self.nf(self.resolution_log2-5), kernel_size=3, padding=(1, 1))
+        # ( 128 x 128 x 128 ) -> ( 256 x 64 x 64 )
+        if self.resolution_log2 >= 7:
+            self.conv4 = nn.Conv2d( 128, 256, kernel_size=3, padding=(1, 1))
+            self.down1 = nn.AvgPool2d(2)
         
-        if self.resolution_log2 > 7:
-            self.conv6 = nn.Conv2d(self.nf(self.resolution_log2-5), self.nf(self.resolution_log2-6), kernel_size=3, padding=(1, 1))
+        # ( 256 x 64 x 64 ) -> ( 512 x 32 x 32 )
+        if self.resolution_log2 >= 6:
+            self.conv5 = nn.Conv2d(256, 512, kernel_size=3, padding=(1, 1))
+            self.down21 = nn.Conv2d(512, 512, kernel_size=2, stride=2)
         
-        if self.resolution_log2 > 8:
-            self.conv7 = nn.Conv2d(self.nf(self.resolution_log2-6), self.nf(self.resolution_log2-7), kernel_size=3, padding=(1, 1))
+        # ( 512 x 32 x 32 ) -> ( 512 x 16 x 16 )
+        if self.resolution_log2 >= 5:
+            self.conv6 = nn.Conv2d(512, 512, kernel_size=3, padding=(1, 1))
+            self.down22 = nn.Conv2d(512, 512, kernel_size=2, stride=2)
         
-        if self.resolution_log2 > 9:
-            self.conv8 = nn.Conv2d(self.nf(self.resolution_log2-7), self.nf(self.resolution_log2-8), kernel_size=3, padding=(1, 1))
+        # ( 512 x 16 x 16 ) -> ( 512 x 8 x 8 )
+        if self.resolution_log2 >= 4:
+            self.conv7 = nn.Conv2d(512, 512, kernel_size=3, padding=(1, 1))
+            self.down23 = nn.Conv2d(512, 512, kernel_size=2, stride=2)
+        
+        # ( 512 x 8 x 8 ) -> ( 512 x 4 x 4 )
+        if self.resolution_log2 >= 3:
+            self.conv8 = nn.Conv2d( 512, 512, kernel_size=3, padding=(1, 1))
+            self.down24 = nn.Conv2d(512, 512, kernel_size=2, stride=2)
 
         # calculate point:
-        self.conv_last = nn.Conv2d(self.nf(self.resolution_log2-8), self.nf(1), kernel_size=3, padding=(1, 1))
+        self.conv_last = nn.Conv2d( 512, 512, kernel_size=3, padding=(1, 1))
+        
+        
         self.dense0 = nn.Linear(fmap_base, self.nf(0))
         self.dense1 = nn.Linear(self.nf(0), 1)
-        self.sigmoid = nn.Sigmoid()
+        # self.sigmoid = nn.Sigmoid()
 
     def forward(self, input):
         if self.structure == 'fixed':
@@ -348,54 +359,50 @@ class StyleDiscriminator(nn.Module):
             x = F.leaky_relu(self.fromrgb(input), 0.2, inplace=True)
             
             # 1. 1024 x 1024 x nf(9)(16) -> 512 x 512
-            res = self.resolution_log2
-
-            if res >= 3:
+            # res = 10
+            if self.resolution_log2 >= 10:
                 x = F.leaky_relu(self.conv1(x), 0.2, inplace=True)
                 x = F.leaky_relu(self.down1(self.blur2d(x)), 0.2, inplace=True)
 
             # 2. 512 x 512 -> 256 x 256
-            res -= 1
-            
-            if res >= 3:
+            # res = 9
+            if self.resolution_log2 >= 9:
                 x = F.leaky_relu(self.conv2(x), 0.2, inplace=True)
                 x = F.leaky_relu(self.down1(self.blur2d(x)), 0.2, inplace=True)
 
             # 3. 256 x 256 -> 128 x 128
-            res -= 1
-            if res >= 3:
+            # res = 8
+            if self.resolution_log2 >= 8:
                 x = F.leaky_relu(self.conv3(x), 0.2, inplace=True)
                 x = F.leaky_relu(self.down1(self.blur2d(x)), 0.2, inplace=True)
 
             # 4. 128 x 128 -> 64 x 64
-            res -= 1
-
-            if res >= 3:
+            # res = 7
+            if self.resolution_log2 >= 7:
                 x = F.leaky_relu(self.conv4(x), 0.2, inplace=True)
                 x = F.leaky_relu(self.down1(self.blur2d(x)), 0.2, inplace=True)
 
             # 5. 64 x 64 -> 32 x 32
-            res -= 1
-
-            if res >= 3:
+            # res = 6
+            if self.resolution_log2 >= 6:
                 x = F.leaky_relu(self.conv5(x), 0.2, inplace=True)
                 x = F.leaky_relu(self.down21(self.blur2d(x)), 0.2, inplace=True)
 
             # 6. 32 x 32 -> 16 x 16
-            res -= 1
-            if res >= 3:
+            # res = 5
+            if self.resolution_log2 >= 5:
                 x = F.leaky_relu(self.conv6(x), 0.2, inplace=True)
                 x = F.leaky_relu(self.down22(self.blur2d(x)), 0.2, inplace=True)
 
             # 7. 16 x 16 -> 8 x 8
-            res -= 1
-            if res >= 3:
+            # res = 4
+            if self.resolution_log2 >= 4:
                 x = F.leaky_relu(self.conv7(x), 0.2, inplace=True)
                 x = F.leaky_relu(self.down23(self.blur2d(x)), 0.2, inplace=True)
 
             # 8. 8 x 8 -> 4 x 4
-            res -= 1
-            if res >= 3:
+            # res = 3
+            if self.resolution_log2 >= 3:
                 x = F.leaky_relu(self.conv8(x), 0.2, inplace=True)
                 x = F.leaky_relu(self.down24(self.blur2d(x)), 0.2, inplace=True)
 
