@@ -61,6 +61,7 @@ class FC(nn.Module):
                  lrmul=1.0,
                  bias=True):
         """
+            Linear layer with equalized learning rate and custom learning rate multiplier.
             The complete conversion of Dense/FC/Linear Layer of original Tensorflow version.
         """
         super(FC, self).__init__()
@@ -186,7 +187,6 @@ class PixelNorm(nn.Module):
     def __init__(self, epsilon=1e-8):
         """
             @notice: avoid in-place ops.
-            https://discuss.pytorch.org/t/encounter-the-runtimeerror-one-of-the-variables-needed-for-gradient-computation-has-been-modified-by-an-inplace-operation/836/3
         """
         super(PixelNorm, self).__init__()
         self.epsilon = epsilon
@@ -202,7 +202,6 @@ class InstanceNorm(nn.Module):
     def __init__(self, epsilon=1e-8):
         """
             @notice: avoid in-place ops.
-            https://discuss.pytorch.org/t/encounter-the-runtimeerror-one-of-the-variables-needed-for-gradient-computation-has-been-modified-by-an-inplace-operation/836/3
         """
         super(InstanceNorm, self).__init__()
         self.epsilon = epsilon
