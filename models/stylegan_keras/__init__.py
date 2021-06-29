@@ -1,1 +1,1 @@
-from .models import getGenerator, getPretrainedDiscriminator, getPretrainedGenerator
+from .models import getGenerator, getPretrainedDiscriminator, getPretrainedGenerator, StyleDiscriminator
