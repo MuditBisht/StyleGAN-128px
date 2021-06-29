@@ -138,44 +138,44 @@ class StyleDiscriminator(nn.Module):
         # (16 x 1024 x 1024 ) -> ( 32 x 512 x 512 )
         if self.resolution_log2 >= 10:
             self.conv10 = nn.Conv2d( 16, 16, kernel_size=3, padding=(1, 1))
-            self.conv11 = nn.Conv2d(16, 32, kernel_size=3, padding=(1,1))
+            self.conv11 = nn.Conv2d(16, 32, kernel_size=3, stride=2, padding=(1,1))
         # ( 32 x 512 x 512 ) -> ( 64 x 256 x 256 )
         if self.resolution_log2 >= 9:
             self.conv20 = nn.Conv2d(32, 32, kernel_size=3, padding=(1, 1))
-            self.conv21 = nn.Conv2d(32, 64, kernel_size=3, padding=(1,1))
+            self.conv21 = nn.Conv2d(32, 64, kernel_size=3, stride=2, padding=(1,1))
         
         # ( 64 x 256 x 256 ) -> ( 128 x 128 x 128 )
         if self.resolution_log2 >= 8:
             self.conv30 = nn.Conv2d(64, 64, kernel_size=3, padding=(1, 1))
-            self.conv31 = nn.Conv2d(64, 128, kernel_size=3, padding=(1, 1))
+            self.conv31 = nn.Conv2d(64, 128, kernel_size=3, stride=2, padding=(1, 1))
             
         # ( 128 x 128 x 128 ) -> ( 256 x 64 x 64 )
         if self.resolution_log2 >= 7:
             self.conv40 = nn.Conv2d( 128, 128, kernel_size=3, padding=(1, 1))
-            self.conv41 = nn.Conv2d( 128, 256, kernel_size=3, padding=(1, 1))
+            self.conv41 = nn.Conv2d( 128, 256, kernel_size=3, stride=2, padding=(1, 1))
             
         
         # ( 256 x 64 x 64 ) -> ( 512 x 32 x 32 )
         if self.resolution_log2 >= 6:
             self.conv50 = nn.Conv2d(256, 256, kernel_size=3, padding=(1, 1))
-            self.conv51 = nn.Conv2d(256, 512, kernel_size=3, padding=(1, 1))
+            self.conv51 = nn.Conv2d(256, 512, kernel_size=3, stride=2, padding=(1, 1))
         
         # ( 512 x 32 x 32 ) -> ( 512 x 16 x 16 )
         if self.resolution_log2 >= 5:
             self.conv60 = nn.Conv2d(512, 512, kernel_size=3, padding=(1, 1))
-            self.conv61 = nn.Conv2d(512, 512, kernel_size=3, padding=(1, 1))
+            self.conv61 = nn.Conv2d(512, 512, kernel_size=3, stride=2, padding=(1, 1))
             
         
         # ( 512 x 16 x 16 ) -> ( 512 x 8 x 8 )
         if self.resolution_log2 >= 4:
             self.conv70 = nn.Conv2d(512, 512, kernel_size=3, padding=(1, 1))
-            self.conv71 = nn.Conv2d(512, 512, kernel_size=3, padding=(1, 1))
+            self.conv71 = nn.Conv2d(512, 512, kernel_size=3, stride=2, padding=(1, 1))
 
         
         # ( 512 x 8 x 8 ) -> ( 512 x 4 x 4 )
         if self.resolution_log2 >= 3:
             self.conv80 = nn.Conv2d( 512, 512, kernel_size=3, padding=(1, 1))
-            self.conv81 = nn.Conv2d( 512, 512, kernel_size=3, padding=(1, 1))
+            self.conv81 = nn.Conv2d( 512, 512, kernel_size=3, stride=2, padding=(1, 1))
             
 
         # calculate point:
@@ -242,6 +242,7 @@ class StyleDiscriminator(nn.Module):
 
             # 9. 4 x 4 -> point
             x = F.leaky_relu(self.conv_last(x), 0.2, inplace=True)
+
             # N x 8192(4 x 4 x nf(1)).
             x = x.view(x.size(0), -1)
             x = F.leaky_relu(self.dense0(x), 0.2, inplace=True)
